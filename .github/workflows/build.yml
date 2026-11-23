@@ -1,0 +1,32 @@
+name: Build BitChord APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild source ZIP
+        run: |
+          cat BitChord-source.zip.part* > source.zip
+          unzip source.zip -d source
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build APK
+        working-directory: source/BitChord-main
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BitChord-Atmos-Test
+          path: source/BitChord-main/app/build/outputs/apk/debug/*.apk
