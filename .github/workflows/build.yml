@@ -29,4 +29,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BitChord-Atmos-Test
-          path: source/BitChord-main/app/build/outputs/apk/debug/*.apk
+          path: |
+  source/BitChord-main/**/*.apk
