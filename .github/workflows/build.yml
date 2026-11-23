@@ -1,3 +1,4 @@
+
 name: Build BitChord APK
 
 on:
@@ -18,7 +19,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
       - name: Build APK
         working-directory: source/BitChord-main
@@ -26,8 +27,11 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK files
+        uses: actions/upload-artifact@v4
         with:
           name: BitChord-Atmos-Test
           path: |
-  source/BitChord-main/**/*.apk
+            source/BitChord-main/**/*.apk
+          if-no-files-found: error
+          
