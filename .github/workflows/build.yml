@@ -9,14 +9,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Rebuild source ZIP
         run: |
           cat BitChord-source.zip.part* > source.zip
-          unzip source.zip -d source
+          unzip -q source.zip -d source
 
-      - uses: actions/setup-java@v4
+      - name: Locate player labels
+        working-directory: source/BitChord-main
+        run: |
+          echo "=== BUSCANDO ETIQUETAS DE AUDIO ==="
+          grep -RIn \
+            --include="*.kt" \
+            --include="*.xml" \
+            --include="*.java" \
+            -E 'AAC Stereo|Dolby Atmos|Atmos' . \
+            | head -n 150 || true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
