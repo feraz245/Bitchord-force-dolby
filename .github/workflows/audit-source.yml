@@ -1,0 +1,87 @@
+name: Audit BitChord audio source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rebuild source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          parts=(BitChord-source.zip.part*)
+          if [ "${#parts[@]}" -eq 0 ]; then
+            echo "No se encontraron BitChord-source.zip.part* en la raíz."
+            exit 1
+          fi
+          for part in "${parts[@]}"; do
+            cat "$part"
+          done > source.zip
+          unzip -q source.zip -d source
+
+      - name: Inspect audio and player implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(find "$GITHUB_WORKSPACE/source" -type f -name gradlew -printf '%h\n' | head -n 1)"
+          if [ -z "$ROOT" ]; then
+            echo "No se encontró gradlew dentro del ZIP reconstruido."
+            find source -maxdepth 4 -type f | sort | head -n 300
+            exit 1
+          fi
+
+          mkdir -p audit/source
+          echo "$ROOT" > audit/project-root.txt
+          find "$ROOT" -type f \( -name '*.kt' -o -name '*.java' -o -name '*.xml' \) \
+            | sed "s#^$ROOT/##" | sort > audit/source-file-list.txt
+
+          PATTERN='dolby|atmos|eac3|e-ac3|e_ac3|joc|audio/ac4|MediaCodec|Spatializer|AudioTrack|AudioProcessor|ExoPlayer|Media3|Ffmpeg|ffmpeg'
+          rg -n -i "$PATTERN" "$ROOT" \
+            --glob '*.kt' --glob '*.java' --glob '*.xml' --glob '*.gradle' --glob '*.gradle.kts' \
+            > audit/audio-search-results.txt || true
+
+          mapfile -t candidates < <(
+            rg -l -i "$PATTERN" "$ROOT" --glob '*.kt' --glob '*.java' | head -n 60 || true
+          )
+          for file in "${candidates[@]}"; do
+            rel="${file#"$ROOT"/}"
+            mkdir -p "audit/source/$(dirname "$rel")"
+            cp "$file" "audit/source/$rel"
+          done
+
+          find "$ROOT" -maxdepth 4 -type f \
+            \( -name 'build.gradle' -o -name 'build.gradle.kts' -o \
+               -name 'settings.gradle' -o -name 'settings.gradle.kts' -o \
+               -name 'libs.versions.toml' -o -name 'AndroidManifest.xml' \) \
+            | while IFS= read -r file; do
+                rel="${file#"$ROOT"/}"
+                mkdir -p "audit/config/$(dirname "$rel")"
+                cp "$file" "audit/config/$rel"
+              done
+
+          {
+            echo "Project root: $ROOT"
+            echo "Candidate source files copied: ${#candidates[@]}"
+            echo
+            echo "Top-level project files:"
+            find "$ROOT" -maxdepth 2 -type f | sed "s#^$ROOT/##" | sort | head -n 250
+          } > audit/README.txt
+
+          zip -qr bitChord-source-audit.zip audit
+
+      - name: Upload source audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: BitChord-Source-Audit
+          path: bitChord-source-audit.zip
+          if-no-files-found: error
+          retention-days: 7
